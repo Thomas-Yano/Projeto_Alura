@@ -169,17 +169,17 @@ def agente_revisor(topico, rascunho_gerado):
         model="gemini-2.0-flash",
         instruction="""
         Você é um revisor Criativo especializado em linguagem e gramatica,
-        com foco em criar redações e resumos tecnicos profissionais.
+        com foco em criar redações e resumos tecnicos.
         Você escreve para alunos e profissionais buscando aprimorar seus conhecimentos.
         Escrita profissional mas com toque didático. Seja conciso em suas redações.
         Revise o rascunho de post abaixo sobre o tópico indicado, verificando
-        sua escrita.
+        sua escrita, **assegurando que a Forma de Abordagem e o Propósito originais sejam mantidos**.
         Não desejo que seja exigente e nem faça muitas correções
         Apenas exija mudança se for realmente importante e necessário para
         melhoria do material original.
         Se o rascunho estiver bom, responda apenas 'O rascunho está pronto!'.
         O texto deve seguir um padrão de no máximo 300 palavras.
-        proibido de fazer correção após 2 tentativas.
+        NÃO FAZER CORREÇÃO após 2 tentativas.
         """,
         description="Agente revisor de post."
     )
@@ -197,9 +197,17 @@ from google.adk.sessions import InMemorySessionService # Import InMemorySessionS
 from google.adk.tools import google_search # Import google_search
 from google.genai import types  # Para criar conteúdos (Content e Part) # Import types
 import textwrap
+import os
+from google.colab import userdata
 
-# --- Funções Auxiliares (mantenha ou adapte conforme necessário) ---
-# ... (mantenha as definições de extract_content_from_part, call_agent, to_markdown, extrair_secoes_do_plano)
+# Configura a API Key do Google Gemini
+os.environ["GOOGLE_API_KEY"] = userdata.get('GOOGLE_API_KEY')
+
+from google import genai
+
+client = genai.Client()
+
+MODEL_ID = "gemini-2.0-flash"
 
 def extract_content_from_part(part):
     """Extracts text content from a GenAI Part."""
@@ -208,13 +216,10 @@ def extract_content_from_part(part):
     return ""
 
 def call_agent(agent: Agent, message_text: str) -> str:
-    # Cria um serviço de sessão em memória
+    """Calls an agent with a message and returns the final response."""
     session_service = InMemorySessionService()
-    # Cria uma nova sessão
     session = session_service.create_session(app_name=agent.name, user_id="user1", session_id="session1")
-    # Cria um Runner para o agente
     runner = Runner(agent=agent, app_name=agent.name, session_service=session_service)
-    # Cria o conteúdo da mensagem de entrada
     content = types.Content(role="user", parts=[types.Part(text=message_text)])
 
     final_response = ""
@@ -226,19 +231,21 @@ def call_agent(agent: Agent, message_text: str) -> str:
                 final_response += "\n"
     except Exception as e:
         print(f"Error during agent run: {e}")
+        # Retornar uma mensagem de erro ou rascunho parcial em caso de falha
+        return f"Erro ao chamar o agente {agent.name}: {e}"
     return final_response
 
 def to_markdown(text):
   text = text.replace('•', '  *')
   return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True))
 
-
 def extrair_secoes_do_plano(texto_plano: str) -> list[str]:
     secoes = []
+    # Padrões mais robustos para extrair títulos de seção
     padroes_secao = [
-        r'^\s*##\s*(.+)',
-        r'^\s*\d+\.\s*(.+)',
-        r'^\s*-\s*(.+)'
+        r'^\s*##\s*(.+)',  # Títulos em Markdown ##
+        r'^\s*\d+\.\s*(.+)', # Listas numeradas 1.
+        r'^\s*-\s*(.+)'    # Listas com traço -
     ]
     linhas = texto_plano.splitlines()
     for linha in linhas:
@@ -246,18 +253,21 @@ def extrair_secoes_do_plano(texto_plano: str) -> list[str]:
             match = re.match(padrao, linha.strip())
             if match:
                 secao_titulo = match.group(1).strip()
+                # Adicionar uma verificação para evitar seções vazias ou muito curtas
                 if secao_titulo and len(secao_titulo) > 3:
                     secoes.append(secao_titulo)
-                break
+                break # Parar após encontrar o primeiro padrão correspondente na linha
+    # Adicionar uma seção padrão se nenhuma for encontrada, mas houver algum texto
     if not secoes and texto_plano.strip():
+         print("Aviso: Nenhuma seção clara encontrada no plano. Usando 'Conteúdo Principal'.")
          return ["Conteúdo Principal"]
     elif not secoes and not texto_plano.strip():
+        print("Aviso: O plano de conteúdo está vazio.")
         return []
     return secoes
 
 
-# --- Agente 1: Buscador de Notícias ---
-# Defina o objeto do agente aqui ou antes da lógica principal
+# --- Definição dos Agentes ---
 buscador_agent_obj = Agent(
     name="agente_buscador",
     model="gemini-2.0-flash",
@@ -279,8 +289,6 @@ buscador_agent_obj = Agent(
     """
 )
 
-# --- Agente 2: Planejador de posts ---
-# Defina o objeto do agente aqui ou antes da lógica principal
 planejador_agent_obj = Agent(
     name="agente_planejador",
     model="gemini-2.0-flash",
@@ -306,8 +314,6 @@ planejador_agent_obj = Agent(
     description="Planejador de conteúdo",
 )
 
-# --- Agente 3: Redator do Post ---
-# Defina o objeto do agente aqui ou antes da lógica principal
 redator_agent_obj = Agent(
     name="agente_redator",
     model="gemini-2.0-flash",
@@ -326,14 +332,12 @@ redator_agent_obj = Agent(
     description="Agente redator de posts engajador"
 )
 
-# --- Agente 4: Revisor de Qualidade ---
-# Defina o objeto do agente aqui ou antes da lógica principal
 revisor_agent_obj = Agent(
     name="agente_revisor",
     model="gemini-2.0-flash",
     instruction="""
         Você é um revisor Criativo especializado em linguagem e gramatica,
-        com foco em criar redações e resumos tecnicos profissionais.
+        com foco em criar redações e resumos tecnicos.
         Você escreve para alunos e profissionais buscando aprimorar seus conhecimentos.
         Escrita profissional mas com toque didático. Seja conciso em suas redações.
         Revise o rascunho de post abaixo sobre o tópico indicado, verificando
@@ -341,19 +345,18 @@ revisor_agent_obj = Agent(
         Não desejo que seja exigente e nem faça muitas correções
         Apenas exija mudança se for realmente importante e necessário para
         melhoria do material original.
-        Se o rascunho estiver bom, responda apenas 'O rascunho está pronto!'.
+        Se o rascunho estiver bom, responda apenas 'O rascunho está ótimo e pronto!'.
         O texto deve seguir um padrão de no máximo 300 palavras.
-        proibido de fazer correção após 2 tentativas.
+        NÃO FAZER CORREÇÃO após 2 tentativas.
         """,
     description="Agente revisor de post."
 )
 
 
-# --- Lógica Principal de Orquestração do Chatbot (Modificada) ---
+# --- Lógica Principal de Orquestração do Chatbot ---
 
 ## 🚀 Iniciando o Sistema de Planejamento e Geração de Conteúdo 🚀
 
-# Obtém a data atual para uso posterior
 data_de_hoje = date.today().strftime("%d/%m/%Y")
 
 ### ❓ Obtendo o Tópico e Preferências do Usuário
@@ -471,8 +474,11 @@ else:
           while not revisao_finalizada and tentativas_revisao < MAX_TENTATIVAS_REVISAO:
               tentativas_revisao += 1
               print(f"\n--- Revisando Seção (Tentativa {tentativas_revisao}/{MAX_TENTATIVAS_REVISAO}) ---")
+              # --- Adicionados logs de depuração ---
+              print(f"Estado inicial da revisão: revisao_finalizada={revisao_finalizada}, tentativas_revisao={tentativas_revisao}")
+              # --- Fim dos logs de depuração ---
 
-              # Inclua as preferências do usuário na entrada para o revisor
+
               entrada_para_revisor_secao = f"""
               Tópico Geral: {topico}
               Forma de Abordagem Desejada: {forma_abordagem if forma_abordagem else 'Não especificada'}
@@ -491,13 +497,19 @@ else:
               display(to_markdown(feedback_revisor))
               print("-------------------------------")
 
+              # --- Adicionados logs de depuração ---
+              print(f"Feedback bruto do revisor: '{feedback_revisor}'")
+              print(f"Feedback processado (minusculo/sem espaços): '{feedback_revisor.strip().lower()}'")
+              # --- Fim dos logs de depuração ---
+
               if feedback_revisor.strip().lower() == 'o rascunho está ótimo e pronto!':
                   print(f"👍 Seção '{secao}' aprovada pelo Revisor!")
-                  revisao_finalizada = True # Sai do loop de revisão para esta seção
+                  revisao_finalizada = True
+                  # --- Adicionados logs de depuração ---
+                  print(f"Valor de revisao_finalizada após aprovação: {revisao_finalizada}")
+                  # --- Fim dos logs de depuração ---
               else:
                   print(f"🔄 Seção '{secao}' precisa de correções. Enviando feedback para o Redator.")
-                  # Prepara a entrada para o Redator corrigir com base no feedback
-                  # Inclua as preferências do usuário na entrada para o redator corrigir
                   entrada_para_redator_correcao = f"""
                   Tópico Geral: {topico}
                   Forma de Abordagem Desejada: {forma_abordagem if forma_abordagem else 'Não especificada'}
@@ -515,48 +527,35 @@ else:
                   {feedback_revisor}
                   Por favor, incorpore as sugestões de correção do revisor no novo rascunho desta seção, garantindo que a Forma de Abordagem e o Propósito sejam mantidos.
                   """
-                  # Chama o Redator novamente com a solicitação de correção
                   rascunho_da_secao = call_agent(redator_agent_obj, entrada_para_redator_correcao)
                   print("\n#### Rascunho Corrigido:")
                   display(to_markdown(rascunho_da_secao))
                   print("-------------------------------")
 
-          # Fim do ciclo de revisão para a seção atual
+              # --- Adicionados logs de depuração ---
+              print(f"Fim da Tentativa {tentativas_revisao}. Condição do loop: {not revisao_finalizada and tentativas_revisao < MAX_TENTATIVAS_REVISAO}")
+              # --- Fim dos logs de depuração ---
+
 
           if not revisao_finalizada:
               print(f"⚠️ Aviso: A Seção '{secao}' não foi aprovada após {MAX_TENTATIVAS_REVISAO} tentativas. Usando a última versão gerada.")
 
-          # Adiciona a versão final da seção (aprovada ou a última tentativa) à lista de rascunhos individuais
-          # Adiciona também o título da seção para melhor visualização no final
-          rascunhos_individuais_secoes.append(f"## {secao}\n\n{rascunho_da_secao}")
+          # rascunhos_individuais_secoes.append(f"## {secao}\n\n{rascunho_da_secao}") # Remova esta linha
+          rascunho_do_post_partes.append(rascunho_da_secao) # Adiciona apenas o conteúdo do rascunho
 
-          # Adiciona também às partes do rascunho completo (mantendo a funcionalidade original)
-          rascunho_do_post_partes.append(f"## {secao}\n\n{rascunho_da_secao}")
+      # Reconstroi o rascunho final adicionando os títulos de seção antes de cada parte do conteúdo
+      rascunho_do_post_final_formatado = []
+      for i, secao in enumerate(secoes_do_plano):
+          # Adiciona o título da seção e o conteúdo correspondente
+          rascunho_do_post_final_formatado.append(f"## {secao}\n\n{rascunho_do_post_partes[i]}")
 
+      rascunho_do_post = "\n\n".join(rascunho_do_post_final_formatado)
 
-      # Junta todas as partes das seções revisadas para formar o rascunho completo
-      rascunho_do_post = "\n\n".join(rascunho_do_post_partes)
 
       print("\n--- Geração e Revisão por Seção Concluídas ---")
       print("\n## 🎉 Rascunho Completo Gerado (Após Revisão por Seção) 🎉")
-      # Exibe o rascunho completo final formatado
       display(to_markdown(rascunho_do_post))
       print("-------------------------------")
 
 
-  ## ✅ Processo de Planejamento e Geração Finalizado ✅
-
   print("\nO sistema concluiu o processo de planejamento e geração de conteúdo.")
-
-!pwd
-
-# Commented out IPython magic to ensure Python compatibility.
-# %cd /content
-
-!git clone https://github.com/Thomas-Yano/Alura_projeto
-!git config --global user.name "Thomas-Yano"
-!git config --global user.email "yanoyuiti2019@gmail.com"
-!git add .
-!git commit -m "Primeiro commit: Adicionando o notebook do projeto"
-!git remote add origin <URL_DO_SEU_REPOSITORIO_GITHUB>
-!git push -u origin main
