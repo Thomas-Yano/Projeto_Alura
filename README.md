@@ -71,8 +71,4 @@ Este projeto foi desenvolvido como parte da Imersão IA da Alura, integrando rec
 
 ---
 
-Sinta-se à vontade para adaptar este README conforme a evolução do projeto!
 
-Na biotecnologia, a biologia molecular impulsiona a produção de biofármacos, enzimas e produtos industriais. A engenharia de microrganismos para biocombustíveis e bioplásticos exemplifica aplicações inovadoras para um futuro sustentável.
-
-"A biologia molecular é a chave para compreendermos a vida em sua essência e para desenvolvermos soluções inovadoras para os desafios que enfrentamos." - Sydney Brenner, ganhador do Prêmio Nobel de Fisiologia ou Medicina.
